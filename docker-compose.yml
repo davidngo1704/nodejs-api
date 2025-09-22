@@ -1,0 +1,16 @@
+version: "3.8"
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mynodeapp:latest
+    container_name: mynodeapp_local
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    # nếu cần volume để persist logs/config:
+    # volumes:
+    #   - ./logs:/app/logs

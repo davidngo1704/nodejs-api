@@ -1,12 +1,62 @@
-name: Test Runner Local
+name: CI/CD (Self-hosted -> Local Docker)
 
 on:
-  workflow_dispatch:   # Cho phép chạy thủ công từ GitHub UI
-  push:                # Hoặc chạy mỗi khi push code vào repo
+  push:
+    branches: ["main"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
 
 jobs:
-  test:
-    runs-on: self-hosted   # BẮT BUỘC: để job chạy trên local runner
+  build-test-deploy:
+    # ensure job runs on your self-hosted runner configured earlier
+    runs-on: [self-hosted, local]
+
     steps:
-      - name: Say Hello
-        run: echo "Hello World from Local Runner!"
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+        continue-on-error: false
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Build app
+        run: npm run build
+
+      - name: Build & deploy with Docker Compose (local)
+        env:
+          COMPOSE_HTTP_TIMEOUT: 200
+        run: |
+          # ensure docker socket is accessible; this runs on your self-hosted machine
+          echo ">>> Building and deploying with docker compose..."
+          docker compose down || true
+          docker compose up -d --build
+
+      - name: Show last 200 lines of container logs (for quick debug)
+        run: |
+          echo ">>> Container status:"
+          docker ps --filter "name=mynodeapp_local" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+          echo ">>> Logs (tail -n 200):"
+          docker logs --tail 200 mynodeapp_local || true
